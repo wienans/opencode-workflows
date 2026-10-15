@@ -9,12 +9,12 @@ updates:
       dev-dependencies:
         dependency-type: development
     ignore:
-      # The plugin is pinned to one opencode release (engines.opencode, 2.0.15).
+      # The plugin is pinned to one opencode release (engines.opencode, 2.0.29).
       # @opencode/* bumps must be tested manually against the live CLI
       # (e2e suite + parity review, see CONTRIBUTING.md "Testing against a new
       # opencode version"), so Dependabot never proposes them.
       - dependency-name: "@opencode/*"
-      # effect is pinned to the exact version @opencode/codemode 2.0.15 depends on:
+      # effect is pinned to the exact version @opencode/codemode 2.0.29 depends on:
       # the plugin hands Effect values to codemode, so both must share one copy.
       # It moves only together with @opencode/*.
       - dependency-name: "effect"

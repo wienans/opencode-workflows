@@ -36,8 +36,8 @@ body:
     id: opencode-version
     attributes:
       label: opencode version
-      description: "Output of `opencode --version`. The plugin is tested against 2.0.15 only."
-      placeholder: "2.0.15"
+      description: "Output of `opencode --version`. The plugin is pinned to 2.0.29."
+      placeholder: "2.0.29"
     validations:
       required: true
   - type: dropdown

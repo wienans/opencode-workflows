@@ -1,6 +1,6 @@
-# Live end-to-end tests (opencode 2.0.15)
+# Live end-to-end tests (opencode 2.0.29)
 
-`tests/e2e/` drives the **real** opencode 2.0.15 CLI against the plugin, with real model calls.
+`tests/e2e/` drives the **real** opencode 2.0.29 CLI against the plugin, with real model calls.
 These tests are opt-in: they cost money (about $0.20 per full run) and take about 2 minutes.
 
 ```sh
@@ -180,6 +180,21 @@ console size). Seen: the rows showed `opencode/space-bunny-free#low` and the oth
 | `results.test.ts` | Two cases. (1) Two agents, empty result: the notification has `<diagnostics>` with `workflow_control {action:"result", runId:"…"}`, and in a later turn the parent is asked to call `{"action":"result","runId":…,"agent":"beta"}`. The child prompts spell the markers out ("the word BETA, then a hyphen, then the number 5512") so the marker in an output can only come from the return value; the detail view prints the prompt. The test accepts either path and logs which one ran: with `agent`, the detail (`Agent #1 "beta" of run …` and `Return value (text, …)` then `BETA-5512`); without it, the list, whose `#1 "beta" completed … → BETA-5512` preview row must show the value. Observed with `opencode/space-bunny-free`: one run dropped `agent`, filled `agentIndex:0`, `offset:0` and `location:"project"` instead, and got the list (only the list path ran). A later run sent `agent:"beta"` and got the detail view with `BETA-5512`. The detail path is always covered by `tests/parity/results.test.ts`. (2) A partial failure, in natural language ("ultracode… tell me which regions were confirmed… Do not relaunch"): 2 of 4 agents fail at once (unknown `agentType`). The notification has `<agent-failures>2 of 4 agents returned no result`; the parent makes at most 3 `workflow_control` calls before the notification, reads no transcript file, relaunches nothing, and its reply names both failed regions. Passed live with the free parents `opencode/nemotron-3-ultra-free` (twice) and `opencode/space-bunny-free`: 0 `workflow_control` calls before the notification and 0 tool calls after it in every run, with the right reason given ("unknown agent type `no-such-agent`"). | X21 X20 P79 P77 |
 
 ## Results and costs
+
+### 2.0.29 upgrade check, 2026-10-15
+
+- 842 unit/parity tests and 16 offline harness tests passed.
+- The 2 live tests in `commands.test.ts` passed against the pinned CLI in the isolated sandbox.
+  These verify plugin loading, command registration, synthetic inbox delivery and the disable
+  switch without making model calls.
+- Typecheck, server/TUI builds and `npm pack --dry-run` passed. `npm ls effect` showed one shared
+  Effect 4.0.1 copy.
+- The model-backed live suite and interactive TUI check were not rerun. The live observations
+  and screenshots recorded on 2.0.15 remain historical evidence, not 2.0.29 verification.
+- 2.0.29 exposes `ctx.permission.assert`, but this upgrade leaves permission behavior unchanged.
+  The approval and `scriptPath` limitations in `PARITY.md` remain plugin limitations.
+
+### 2.0.15 full runs
 
 Full runs on 2026-09-23 (Windows 11, opencode 2.0.15, parent and children on
 `openai/gpt-5.4-mini`). The latest (final gate) run:

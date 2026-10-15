@@ -77,7 +77,7 @@ describe("README", () => {
     expect(readme).toContain("plugins/workflows.js")
     expect(readme).toContain('export { default } from "')
     expect(readme).toContain("file:///")
-    expect(readme).toContain("2.0.15")
+    expect(readme).toContain("2.0.29")
     expect(readme).toContain("--standalone")
     for (const cmd of ["/deep-research", "/workflows", "/workflow-authoring", "workflow_control", "ultracode"]) {
       expect(readme).toContain(cmd)

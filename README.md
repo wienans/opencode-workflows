@@ -7,7 +7,7 @@ script runs in the background, and its result comes back to your session when it
 [![CI](https://github.com/rphang/opencode-workflows/actions/workflows/ci.yml/badge.svg)](https://github.com/rphang/opencode-workflows/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rphang/opencode-workflows)](https://www.npmjs.com/package/@rphang/opencode-workflows)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![opencode 2.0.15](https://img.shields.io/badge/opencode-2.0.15-black)](#requirements)
+[![opencode 2.0.29](https://img.shields.io/badge/opencode-2.0.29-black)](#requirements)
 
 ```sh
 opencode plugin add @rphang/opencode-workflows
@@ -113,12 +113,12 @@ run (6 agents, under a minute) is in [`demo/DEMO-OUTPUT.md`](demo/DEMO-OUTPUT.md
 
 ## Requirements
 
-- **opencode 2.0.15.** The plugin is pinned to this exact version (`engines.opencode`, and the
-  `@opencode/*` dependencies are 2.0.15). Other 2.x versions are untested. opencode v1 is not
+- **opencode 2.0.29.** The plugin is pinned to this exact version (`engines.opencode`, and the
+  `@opencode/*` dependencies are 2.0.29). Other 2.x versions are untested. opencode v1 is not
   supported, because the plugin uses the v2 plugin API. Check your version with
-  `opencode --version`, which should print `opencode v2.0.15`. One way to install or pin that
-  version is the npm package: `npm install -g @opencode/cli@2.0.15` (this needs Node.js and npm).
-  See [opencode's docs](https://opencode.ai/docs) for other install methods.
+  `opencode --version`, which should print `opencode v2.0.29`. One way to install or pin that
+  version is the npm package: `npm install -g @opencode/cli@2.0.29` (this needs Node.js and npm).
+  See [opencode's docs](https://opencode.ai/v2/docs/) for other install methods.
 - **Nothing else for the plugin.** opencode downloads and installs npm plugins itself, so the
   plugin needs no Node, Bun or npm of its own (your opencode install method might).
 - **git**, only if you use `isolation: 'worktree'` agents. The project must also be a git repo.
@@ -513,7 +513,7 @@ opencode never shows their permission prompts. Upstream work to expose this:
 | P26 | `effort` | DEGRADED | Mapped to a model variant when the model has one, otherwise ignored with a warning. |
 | P34 | `budget` | DEGRADED | One pool per run, counting the run's agents' output and reasoning tokens. The parent session's own tokens are not counted. |
 | P50 | `/workflows` view | DEGRADED | A text view that appears on your next turn. In the TUI, the [live progress tree](#live-progress-tree-tui) is interactive (an extension). |
-| P56 | Approval before a run | DEGRADED | Plugins cannot ask. Set an opencode permission rule of `ask` on the `workflow` tool. |
+| P56 | Approval before a run | DEGRADED | No workflow-specific approval dialog. Set an opencode permission rule of `ask` on the `workflow` tool. |
 | P61 | Permission inheritance | DEGRADED | Rules are copied when the child session is created. |
 | P62 | Child session nesting | DEGRADED | Children are tagged `[wf:<runId>]` instead of being nested. |
 | P63 | Agent permission prompts | DEGRADED | An "ask" becomes "deny", so the agent carries on instead of hanging. |
@@ -654,7 +654,7 @@ whatever model you pick. It has not been tested with Copilot, though. Every agen
 requests, so providers that bill or rate-limit per request will feel a large fan-out.
 
 **Does it work with opencode v1?**
-No. It needs the opencode v2 plugin API and is pinned to 2.0.15.
+No. It needs the opencode v2 plugin API and is pinned to 2.0.29.
 
 **Do I need Claude Code or an Anthropic account?**
 No. This is an independent reimplementation for opencode, and it runs on any provider opencode

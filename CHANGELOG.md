@@ -8,6 +8,11 @@ may contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Update the required opencode version from 2.0.15 to 2.0.29, including the CLI, plugin API and
+  codemode interpreter. Align Effect to 4.0.1 and the TUI build dependencies to OpenTUI 0.5.17.
+
 ## [0.2.0] - 2026-09-24
 
 ### Added

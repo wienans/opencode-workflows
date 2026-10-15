@@ -16,9 +16,9 @@ the repo).
   `npm test` runs the unit and parity suites. `npx tsc --noEmit` must stay clean.
 - Do not add dependencies without discussing it first. Dependencies: `@opencode/codemode`,
   `@opencode/plugin` (use **`import type` only** from it — the runtime does not need it),
-  `acorn`, `ajv`, `effect`, all pinned to opencode 2.0.15 (`effect` must stay the exact version
-  `@opencode/codemode` depends on, so both share one copy). The TUI build adds devDependencies only
-  (`@opentui/core`, `@opentui/solid` 0.5.10 and `solid-js` 1.9.15, opencode 2.0.15's catalog, with an
+  `acorn`, `ajv`, `effect`. Pin `@opencode/*` to opencode 2.0.29 and `effect` to the exact version
+  `@opencode/codemode` depends on, so both share one copy. The TUI build adds devDependencies only
+  (`@opentui/core`, `@opentui/solid` 0.5.17 and `solid-js` 1.9.15, opencode 2.0.29's catalog, with an
   npm `overrides` for `solid-js` like opencode's own); the TUI provides them at runtime.
 - The engine (`src/engine.ts` and friends) is host-agnostic. Everything opencode-specific lives in
   `src/opencode/`. Engine tests use the fake runner in `tests/helpers/`.

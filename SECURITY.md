@@ -3,7 +3,7 @@
 ## Supported versions
 
 Only the latest release of `@rphang/opencode-workflows` receives security fixes. The plugin
-supports one opencode version at a time (currently 2.0.15).
+supports one opencode version at a time (currently 2.0.29).
 
 ## Reporting a vulnerability
 
