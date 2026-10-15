@@ -12,6 +12,10 @@ may contain breaking changes.
 
 - Update the required opencode version from 2.0.15 to 2.0.29, including the CLI, plugin API and
   codemode interpreter. Align Effect to 4.0.1 and the TUI build dependencies to OpenTUI 0.5.17.
+- Non-worktree workflow agents now use native parent/child session links and permission prompts
+  instead of denying every approval request. Worktree agents remain unlinked and fail closed.
+  Use plugin option `permissionMode: "deny"` or `OPENCODE_WORKFLOW_PERMISSION_MODE=deny` for
+  unattended runs. Explicit permission denials and the ban on conversational questions are unchanged.
 
 ## [0.2.0] - 2026-09-24
 

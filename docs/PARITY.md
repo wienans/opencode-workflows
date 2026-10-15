@@ -93,9 +93,9 @@ Install methods, env vars and the user-facing summary of DEGRADED/N/A items: `RE
 | ID  | Behavior | Target | Test |
 |-----|----------|--------|------|
 | P60 | Workflow agents cannot themselves launch workflows (the `workflow` tool is denied in child sessions) | FULL | `subagents.test.ts` "P60 …" ×2 |
-| P61 | Child sessions inherit the parent's permission rules (and permission mode: Plan mode carries through) | DEGRADED (copied at create; no parentID. The child runs as the parent's current agent (tool `ctx.agent`, else `Session.Info.agent`), so agent-level rules such as Plan mode's edit deny apply; with a different `agentType` the parent agent's deny/ask rules are appended after that agent's rules, its allow rules are not. The parent's session rules are copied verbatim. A `subagent` rule that evaluates to "ask" is treated as allowed, since launching the workflow was itself permission-gated and the runner does not request separate approval) | `subagents.test.ts` "P61 …" ×8 |
-| P62 | Child sessions are tagged (title prefix + metadata `{workflowRunId}`) so they are identifiable | DEGRADED (no parent nesting in opencode's public API) | `doc-examples.test.ts` "P62 …" ×1<br>`subagents.test.ts` "P62 …" ×2 |
-| P63 | A workflow agent's permission prompts reach the user; a skipped/stopped agent returns `null`, so a run always finishes | DEGRADED (note 8: a plugin child has no parentID, so opencode never shows its prompts. Instead the `question` tool is denied in every child, and a `permission.hook("evaluate")` turns any "ask" in a session tagged `workflowRunId` into "deny" with an explanation, so the agent carries on without it instead of waiting forever) | `subagents.test.ts` "P63 …" ×3 |
+| P61 | Child sessions inherit the parent's permission rules (and permission mode: Plan mode carries through) | DEGRADED (rules copied at create. Non-worktree agents are linked with parentID; worktree agents remain unlinked. The child runs as the parent's current agent (tool `ctx.agent`, else `Session.Info.agent`), so agent-level rules such as Plan mode's edit deny apply; with a different `agentType` the parent agent's deny/ask rules are appended after that agent's rules, its allow rules are not. The parent's session rules are copied verbatim. A `subagent` rule that evaluates to "ask" is treated as allowed, since launching the workflow was itself permission-gated and the runner does not request separate approval) | `subagents.test.ts` "P61 …" ×8 |
+| P62 | Child sessions are tagged (title prefix + metadata `{workflowRunId}`) so they are identifiable | DEGRADED (non-worktree agents use native parentID links; worktree agents need their own location and remain unlinked) | `doc-examples.test.ts` "P62 …" ×1<br>`subagents.test.ts` "P62 …" ×3<br>`tests/e2e/permissions.test.ts` |
+| P63 | A workflow agent's permission prompts reach the user; a skipped/stopped agent returns `null`, so a run always finishes | DEGRADED (note 8: linked non-worktree agents use native approval by default. Worktree/unlinked agents and permissionMode "deny" runs turn "ask" into "deny". The question tool remains denied in every child. Explicit allow/deny decisions and other sessions are untouched) | `subagents.test.ts` "P63 …" ×6<br>`tests/e2e/permissions.test.ts` ×3 |
 
 ## Other Claude Code behaviors
 
@@ -229,20 +229,20 @@ Review fixes (unit tests in `tests/unit/journal.test.ts` and `tests/unit/engine.
    output + reasoning tokens of this run's agents, including nested `workflow()` children; two runs
    launched in the same turn each get their own pool; and agents replayed from the journal on
    resume count 0, because they cost nothing this turn.
-8. **P63**: opencode shows (and `--auto` answers) permission asks and question forms only for the
-   viewed session and its `parentID` family, and plugin-created children have no parentID. Verified
-   live before this fix: a child reading `C:/Windows/win.ini` hung on a pending `external_directory`
-   ask, and a child calling `question` hung on a pending form, each for as long as the run lived.
-   Now `{action:"question", resource:"*", effect:"deny"}` is appended to every child's rules (after the
-   inherited ones, so a parent allow cannot re-enable it), and every plugin instance registers
-   `ctx.permission.hook("evaluate")`: an "ask" for a session whose metadata has `workflowRunId`
-   becomes "deny" with the message "workflow agents cannot ask for approval…", which the model sees
-   as the tool failure. Allow/deny results and other sessions are untouched. Limits: opencode runs
-   that hook only for sessions in the plugin instance's own location, so an `isolation:'worktree'`
-   child is guarded only when the plugin also loads in the worktree (a global install or a committed
-   `.opencode/`; the same requirement as schema agents in worktrees, note 5). There is no default
-   per-agent timeout: Claude Code has none, and the public API has no idle signal to base one on
-   (`OPENCODE_WORKFLOW_AGENT_TIMEOUT_MS` still sets one).
+8. **P63**: on opencode 2.0.29, non-worktree workflow agents are created with `parentID` and use the
+   native session-family approval UI. The request remains owned by the child, so its own rules,
+   source and native once/always/reject replies remain intact. No permission is re-evaluated as the
+   parent. `permissionMode: "deny"`, or `OPENCODE_WORKFLOW_PERMISSION_MODE=deny`, rejects these asks
+   for unattended runs. The env var wins, invalid values prevent loading, and no client-presence
+   detection is attempted. Worktree agents cannot use a different location with their parent link,
+   so they remain unlinked and their asks are denied with an explanation. Legacy unlinked agents
+   use the same fallback. The `question` tool remains denied in every child, after inherited rules.
+   Explicit allow/deny decisions and other sessions are untouched. The hook must also load in a
+   worktree to guard that location, through a global install or committed `.opencode/`, as for schema
+   agents in note 5. There is no default timeout; `OPENCODE_WORKFLOW_AGENT_TIMEOUT_MS` sets one.
+   `tests/e2e/permissions.test.ts` checks native requests, replies, saved approvals versus explicit
+   denies, and both fail-closed cases without model calls. Interactive TUI rendering is not tested
+   by that suite.
 9. **P06 on dispose**: opencode disposes a plugin instance on shutdown, and also on a live server
    when any plugin that sorts before it is added or updated, when a pending npm plugin install
    finishes, or when the location is evicted after 60 minutes without session events

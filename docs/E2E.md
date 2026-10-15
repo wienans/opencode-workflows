@@ -6,6 +6,7 @@ These tests are opt-in: they cost money (about $0.20 per full run) and take abou
 ```sh
 OPENCODE_E2E=1 npx bun test tests/e2e --timeout 600000       # everything (OPENAI_API_KEY must be set)
 OPENCODE_E2E=1 npx bun test tests/e2e/stop.test.ts --timeout 600000
+OPENCODE_E2E=1 OPENAI_API_KEY=unused npx bun test tests/e2e/permissions.test.ts  # no model calls
 npx bun test tests/e2e/harness.test.ts                          # offline harness tests, always run
 ```
 
@@ -176,10 +177,21 @@ console size). Seen: the rows showed `opencode/space-bunny-free#low` and the oth
 | `worktree.test.ts` | Two `isolation:'worktree'` agents run in `wf-<runId>-<i>` session locations. The clean one is removed and reports no `worktree`. The one that wrote `wt-proof.txt` is kept: its `agents/1.json.worktree` holds the file, the main checkout does not, and it appears in `git worktree list`. | P28 |
 | `stop.test.ts` | `workflow_control stop_agent` on a streaming agent: its `agent()` returns `null` (`log first=null`) and it is journaled `failed` / "stopped by user". The next agent starts; `workflow_control stop` then gives a notification with status `stopped` and a resume hint, the journal shows that agent as `stopped` (not failed), and both child sessions have outcome `interrupted`. | P51 P44 |
 | `commands.test.ts` | No model calls. `/workflow-authoring` and `/workflows` post synthetic text (API reference; "No workflow runs") without starting an assistant turn. With `OPENCODE_DISABLE_WORKFLOWS=1`, the plugin is active but registers no workflow commands. | P58 P50 P57 P54 |
+| `permissions.test.ts` | No model calls. Native linked children retain their own approval requests; once, reject and always replies clear pending requests, saved approvals never override configured denies, and unlinked agents plus unattended deny mode create no pending approval. The workflow runner's use of parentID is covered through the plugin in `tests/parity/subagents.test.ts`. | P62 P63 |
 | `steer.test.ts` | A second project plugin adds a 3-second `slow_step` tool. The child is told to call it four times; during the first call `/workflows msg <runId> 0 …` (through `POST /api/session/:id/command`) replies `#0 stepper sent`. The result is the steered answer, the child made fewer than 4 calls, its context holds the `<orchestrator-message>` before that answer, `agents/0.json` shows the message `delivered`, the journal has the `message` line and `steered:true`. Relaunching with `resumeFromRunId` runs agent 0 live (new session, original answer). A last case sends the message as the final step starts: it is either answered (that reply is the result) or refused (`finishing`/`finished`), and the child's last reply is always the result. | X01 X03 X06 P41 |
 | `results.test.ts` | Two cases. (1) Two agents, empty result: the notification has `<diagnostics>` with `workflow_control {action:"result", runId:"…"}`, and in a later turn the parent is asked to call `{"action":"result","runId":…,"agent":"beta"}`. The child prompts spell the markers out ("the word BETA, then a hyphen, then the number 5512") so the marker in an output can only come from the return value; the detail view prints the prompt. The test accepts either path and logs which one ran: with `agent`, the detail (`Agent #1 "beta" of run …` and `Return value (text, …)` then `BETA-5512`); without it, the list, whose `#1 "beta" completed … → BETA-5512` preview row must show the value. Observed with `opencode/space-bunny-free`: one run dropped `agent`, filled `agentIndex:0`, `offset:0` and `location:"project"` instead, and got the list (only the list path ran). A later run sent `agent:"beta"` and got the detail view with `BETA-5512`. The detail path is always covered by `tests/parity/results.test.ts`. (2) A partial failure, in natural language ("ultracode… tell me which regions were confirmed… Do not relaunch"): 2 of 4 agents fail at once (unknown `agentType`). The notification has `<agent-failures>2 of 4 agents returned no result`; the parent makes at most 3 `workflow_control` calls before the notification, reads no transcript file, relaunches nothing, and its reply names both failed regions. Passed live with the free parents `opencode/nemotron-3-ultra-free` (twice) and `opencode/space-bunny-free`: 0 `workflow_control` calls before the notification and 0 tool calls after it in every run, with the right reason given ("unknown agent type `no-such-agent`"). | X21 X20 P79 P77 |
 
 ## Results and costs
+
+### Native permissions on 2.0.29, 2026-10-15
+
+- All 3 tests in `permissions.test.ts` and both tests in `commands.test.ts` passed in isolated
+  servers, with no model calls.
+- Permission requests remain owned by linked children. Native once, reject and always replies
+  work, and configured denies remain enforced after an always approval.
+- Unlinked workflow sessions and `OPENCODE_WORKFLOW_PERMISSION_MODE=deny` leave no pending
+  approval requests. Allowed actions are unchanged in deny mode.
+- The model-backed live suite and interactive TUI rendering were not rerun for this change.
 
 ### 2.0.29 upgrade check, 2026-10-15
 
@@ -191,8 +203,8 @@ console size). Seen: the rows showed `opencode/space-bunny-free#low` and the oth
   Effect 4.0.1 copy.
 - The model-backed live suite and interactive TUI check were not rerun. The live observations
   and screenshots recorded on 2.0.15 remain historical evidence, not 2.0.29 verification.
-- 2.0.29 exposes `ctx.permission.assert`, but this upgrade leaves permission behavior unchanged.
-  The approval and `scriptPath` limitations in `PARITY.md` remain plugin limitations.
+- The dependency-only update left permission behavior unchanged. The subsequent native linking
+  change is recorded above; `scriptPath` admission still uses non-interactive checks.
 
 ### 2.0.15 full runs
 

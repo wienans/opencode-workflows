@@ -135,9 +135,11 @@ workflow result).
 
 Every subagent prompt is prefixed with a short framing block: the agent runs non-interactively inside a
 workflow script, nobody answers its questions, and its final message is returned verbatim to the script as
-data. So subagents return raw data, not a message for a human; still say exactly what the reply must contain. Workflow agents cannot launch workflows themselves. They cannot ask the user anything
-either: the \`question\` tool is unavailable and any action that would need approval (e.g. reading
-outside the project) is denied, so put everything they need in the prompt.
+data. So subagents return raw data, not a message for a human; still say exactly what the reply must contain.
+Workflow agents cannot launch workflows or ask conversational questions: the \`question\` tool is
+unavailable, so put everything they need in the prompt. Non-worktree agents are linked to the parent
+session, where opencode handles tool permission approvals. Worktree agents and runs configured with
+\`permissionMode: "deny"\` deny approval requests instead of waiting for a user.
 
 ## Limits
 

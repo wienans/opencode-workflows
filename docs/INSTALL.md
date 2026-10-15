@@ -90,6 +90,7 @@ Use the object form of the entry:
 | `disabled: true` | Registers no tools or commands. |
 | `sizeGuideline` | `unrestricted`, `small`, `medium` or `large`. |
 | `dataDir` | Where run transcripts are stored. |
+| `permissionMode` | `prompt` by default for native approval in linked agents. Use `deny` for unattended runs. Worktree agents always deny approval requests. |
 
 Environment variables work with every install method. See the
 [README](../README.md#configuration).

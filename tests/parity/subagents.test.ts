@@ -67,7 +67,7 @@ describe("P61 inherited permissions", () => {
   })
 })
 
-describe("P63 workflow agents never wait on a prompt nobody sees", () => {
+describe("P63 native approval for linked agents", () => {
   test("P63 the `question` tool is denied in every child, after inherited rules (a parent allow cannot re-enable it)", async () => {
     const p = await h.setup({
       real: true,
@@ -84,7 +84,7 @@ describe("P63 workflow agents never wait on a prompt nobody sees", () => {
     }
   })
 
-  test("P63 an `ask` evaluated for a workflow child becomes `deny` with an explanation; allow/deny and other sessions are untouched", async () => {
+  test("P63 a linked child's ask reaches native approval; allow, deny and other sessions are untouched", async () => {
     let child = ""
     const p = await h.setup({
       real: true,
@@ -102,12 +102,13 @@ describe("P63 workflow agents never wait on a prompt nobody sees", () => {
     expect(child).not.toBe("")
 
     const ask = await p.fake.evaluatePermission({ sessionID: child, action: "external_directory", resources: ["C:/Windows/*"], effect: "ask" })
-    expect(ask.effect).toBe("deny")
-    expect(ask.message).toMatch(/workflow agent/i)
-    expect(ask.message).toMatch(/cannot ask/i)
+    expect(ask.effect).toBe("ask")
+    expect(ask.message).toBeUndefined()
     const allow = await p.fake.evaluatePermission({ sessionID: child, action: "read", resources: ["a.ts"], effect: "allow" })
     expect(allow.effect).toBe("allow")
     expect(allow.message).toBeUndefined()
+    const denied = await p.fake.evaluatePermission({ sessionID: child, action: "edit", resources: ["a.ts"], effect: "deny" })
+    expect(denied.effect).toBe("deny")
     const parent = await p.fake.evaluatePermission({ sessionID: p.fake.parentID, action: "external_directory", resources: ["C:/Windows/*"], effect: "ask" })
     expect(parent.effect).toBe("ask")
     const unknown = await p.fake.evaluatePermission({ sessionID: "ses_gone", action: "bash", resources: ["ls"], effect: "ask" })
@@ -123,9 +124,52 @@ describe("P63 workflow agents never wait on a prompt nobody sees", () => {
     await p.cleanup!()
     expect(p.fake.permissionHooks.length).toBe(0)
   })
+
+  test("P63 permissionMode deny rejects a linked child's asks without blocking allowed work or changing the parent", async () => {
+    const p = await h.setup({ real: true, options: { permissionMode: "deny" } })
+    await p.call({ script: script(`return await agent("unattended")`) })
+    await p.notification(0)
+    const child = p.fake.children()[0]!.info.id
+    expect((await p.fake.ctx.session.get({ sessionID: child })).parentID).toBe(p.fake.parentID)
+    const ask = await p.fake.evaluatePermission({ sessionID: child, action: "shell", resources: ["git status"], effect: "ask" })
+    expect(ask.effect).toBe("deny")
+    expect(ask.message).toContain("permissionMode")
+    expect((await p.fake.evaluatePermission({ sessionID: child, action: "read", resources: ["a.ts"], effect: "allow" })).effect).toBe("allow")
+    expect((await p.fake.evaluatePermission({ sessionID: p.fake.parentID, action: "shell", resources: ["git status"], effect: "ask" })).effect).toBe("ask")
+  })
+
+  test.each([
+    { option: "prompt", env: "deny", expected: "deny" },
+    { option: "deny", env: "prompt", expected: "ask" },
+  ])("P63 environment permission mode $env overrides plugin option $option", async ({ option, env, expected }) => {
+    const p = await h.setup({ real: true, options: { permissionMode: option }, env: { OPENCODE_WORKFLOW_PERMISSION_MODE: env } })
+    await p.call({ script: script(`return await agent("configured")`) })
+    await p.notification(0)
+    const child = p.fake.children()[0]!.info.id
+    const ask = await p.fake.evaluatePermission({ sessionID: child, action: "shell", resources: ["git status"], effect: "ask" })
+    expect(ask.effect).toBe(expected)
+  })
 })
 
 describe("P62 tagged child sessions", () => {
+  test("P62 ordinary agents are linked to their parent; worktree agents keep their own location without a parentID", async () => {
+    const p = await h.setup({ real: true })
+    await p.call({ script: script(`return [await agent("linked"), await agent("isolated", { isolation: "worktree" })]`) })
+    await p.notification(0)
+    const [linked, isolated] = p.fake.children()
+    const linkedInfo = await p.fake.ctx.session.get({ sessionID: linked!.info.id })
+    const isolatedInfo = await p.fake.ctx.session.get({ sessionID: isolated!.info.id })
+    expect(linkedInfo.parentID).toBe(p.fake.parentID)
+    expect(linkedInfo.location.directory).toBe(h.projectDir)
+    expect(isolatedInfo.parentID).toBeUndefined()
+    expect(isolatedInfo.location.directory).not.toBe(h.projectDir)
+    const ask = { action: "external_directory", resources: ["C:/outside/*"], effect: "ask" as const }
+    expect((await p.fake.evaluatePermission({ sessionID: linked!.info.id, ...ask })).effect).toBe("ask")
+    const isolatedAsk = await p.fake.evaluatePermission({ sessionID: isolated!.info.id, ...ask })
+    expect(isolatedAsk.effect).toBe("deny")
+    expect(isolatedAsk.message).toContain("without a linked parent")
+  })
+
   test("P62 child sessions carry a `[wf:<runId>]` title prefix and {workflowRunId, workflowAgentIndex, parentSessionID, workflowPhase} metadata", async () => {
     const p = await h.setup({ real: true })
     const out = await p.call({ script: script(`phase("Scan"); await agent("first task"); return await agent("second task", { label: "two" })`) })
@@ -226,6 +270,7 @@ describe("P78 subagent framing", () => {
       expect(pre).toMatch(/workflow script/)
       expect(pre).toMatch(/[Nn]o human/)
       expect(pre).toMatch(/do not ask questions or ask for confirmation/i)
+      expect(pre).toMatch(/tool permission approvals are handled by opencode/i)
       expect(pre).toMatch(/assumption/)
       expect(pre).toMatch(/returned .*to the script as data/)
       expect(pre).toMatch(/cannot launch workflows/)

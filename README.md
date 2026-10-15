@@ -223,7 +223,8 @@ the session in the TUI, or run `opencode run -c` (continue the last session) or
 `opencode run -s <sessionID>` to see it.
 
 **Headless (`opencode serve` with no client attached).** Nobody can answer a permission prompt
-there, so a turn that raises one waits until it times out or someone answers. The plugin never asks
+there. Set `OPENCODE_WORKFLOW_PERMISSION_MODE=deny` so workflow agents refuse actions requiring
+approval instead of waiting. This does not change the parent session's permissions. The plugin never asks
 the model to read run files, but a model can still try: the run store is outside the project, so
 opencode asks for `external_directory` approval, and a turn woken by a notification can sit on that
 prompt. In unattended setups, add a rule for the data dir (`deny` is fine: the model then uses
@@ -469,6 +470,10 @@ Plugin options (config install only, see [Install](#other-options)):
 | `sizeGuideline` | `unrestricted`, `small`, `medium` (default) or `large`: tells the model to aim for fewer than ∞, 5, 10 or 50 agents. |
 | `dataDir` | Where run transcripts are stored. Takes precedence over `OPENCODE_WORKFLOW_DATA_DIR`. |
 | `rpcControl: false` | Makes the live tree's RPC read-only: the tree still shows runs, but its `x`, `p` and `m` keys (and any other RPC client) cannot stop, pause or message them. `/workflows msg` and `workflow_control` still work. See [Security model](#security-model). |
+| `permissionMode` | `prompt` (default) lets linked, non-worktree agents use native tool approval prompts in the parent session. `deny` refuses actions requiring approval, for unattended runs. Worktree agents always deny approval requests. |
+
+Permission mode does not detect connected clients. Use `deny` when no client will answer prompts.
+Invalid mode values prevent the plugin from loading.
 
 ## Environment variables
 
@@ -482,6 +487,7 @@ Set them in the environment of the opencode server. They work with every install
 | `OPENCODE_WORKFLOW_AGENT_TIMEOUT_MS` | unset (no timeout) | Per-agent timeout. An agent that exceeds it fails, and `agent()` returns `null`. |
 | `MAX_STRUCTURED_OUTPUT_RETRIES` (or `OPENCODE_WORKFLOW_MAX_STRUCTURED_OUTPUT_RETRIES`) | `5` | Attempts a schema agent gets before `agent()` throws. |
 | `OPENCODE_WORKFLOW_RPC_CONTROL` | unset (on) | `0`, `false`, `no` or `off` makes the live tree's RPC read-only, like the `rpcControl: false` option. |
+| `OPENCODE_WORKFLOW_PERMISSION_MODE` | `prompt` | `prompt` or `deny`, like the `permissionMode` option. The env var wins. Set `deny` for unattended workflow agents; this leaves the parent session's permissions unchanged. |
 | `OPENCODE_WORKFLOW_DATA_DIR` | `$XDG_DATA_HOME/opencode/workflows`, else `%LOCALAPPDATA%\opencode\workflows` (Windows) or `~/.local/share/opencode/workflows` | Run transcripts, stored as `<dir>/<sessionID>/<runId>/`. The `dataDir` plugin option wins over it. |
 
 ## How it compares to Claude Code
@@ -500,10 +506,10 @@ that check it:
 The same file specifies the 21 extensions (status `EXT`, `X01`–`X21`): steering, the live progress
 tree and its RPC, the per-agent model display, and the per-agent failure summary and outputs.
 
-Most of the gaps come from one limit of opencode's plugin API: **a plugin cannot create a child
-session with a `parentID`**. So workflow agents aren't nested under your session in the UI, and
-opencode never shows their permission prompts. Upstream work to expose this:
-[anomalyco/opencode#47745](https://github.com/anomalyco/opencode/pull/47745).
+Non-worktree agents use opencode's native `parentID` link, so they appear under their parent and
+their tool permission requests reach the parent session's approval UI. Linked children inherit
+the parent's location, so worktree-isolated agents remain separate sessions and deny approval
+requests. Use `permissionMode: "deny"` for unattended runs.
 
 ### Limitations
 
@@ -515,8 +521,8 @@ opencode never shows their permission prompts. Upstream work to expose this:
 | P50 | `/workflows` view | DEGRADED | A text view that appears on your next turn. In the TUI, the [live progress tree](#live-progress-tree-tui) is interactive (an extension). |
 | P56 | Approval before a run | DEGRADED | No workflow-specific approval dialog. Set an opencode permission rule of `ask` on the `workflow` tool. |
 | P61 | Permission inheritance | DEGRADED | Rules are copied when the child session is created. |
-| P62 | Child session nesting | DEGRADED | Children are tagged `[wf:<runId>]` instead of being nested. |
-| P63 | Agent permission prompts | DEGRADED | An "ask" becomes "deny", so the agent carries on instead of hanging. |
+| P62 | Child session nesting | DEGRADED | Non-worktree agents are linked to their parent. Worktree agents remain separate, tagged `[wf:<runId>]`. |
+| P63 | Agent permission prompts | DEGRADED | Linked agents use native approval by default. Worktree agents and `permissionMode: "deny"` runs refuse approval requests. Conversational questions remain disabled. |
 | P71 | Fan-out prefix stagger | DEGRADED | Not implemented: all agents start at once. |
 | P72 | Plugin-namespaced workflows | N/A | opencode plugins cannot ship `workflows/` folders for other plugins. |
 | P73 | Restart one agent | DEGRADED | Use `stop_agent`, or stop the run and resume it. |
@@ -528,8 +534,8 @@ Also:
 
 - **Notifications are queued.** A finished run's notification arrives after your current turn,
   never mid-turn.
-- **Workflow agents cannot ask you anything.** Put everything an agent needs in its prompt, and
-  allow the tools it needs through opencode permission rules.
+- **Workflow agents cannot ask conversational questions.** Put everything an agent needs in its
+  prompt. Tool permission approvals are separate and use the native UI for linked agents.
 - **Steering is not instant.** An agent reads a message at its next step boundary, after its current
   model step and tool calls finish (`msg!` interrupts the step and loses its tokens). Resume does
   not replay messages: steered agents run again with their original prompts.
@@ -561,7 +567,9 @@ Also:
 - **Agents get your permissions, never more.** Each child session copies the parent session's rules
   and runs as the parent's current agent, so Plan mode's edit ban still applies. With a different
   `agentType`, the parent agent's deny and ask rules are added on top. In every child, `workflow`,
-  `workflow_control`, `workflow_submit` and `question` are denied, and any "ask" becomes "deny".
+  `workflow_control` and `question` are denied; `workflow_submit` is allowed only for schema agents.
+  Explicit denials remain enforced. Linked agents use native approval for "ask"; worktree agents
+  and `permissionMode: "deny"` runs turn "ask" into "deny" without changing allowed actions.
 - **`scriptPath` reads only files you could read anyway**: the project, this session's runs and the
   personal workflows directory, plus directories an `external_directory` allow rule covers. Symlinks
   are resolved first, `read` deny rules apply, and UNC or device paths are refused.
@@ -634,7 +642,7 @@ agents, and a big fan-out can use many times the tokens of a single chat. For ex
 | A headless `opencode serve` turn hangs after a run finishes | A permission prompt is waiting and no client is attached to answer it (often an `external_directory` read of the data dir). Answer it through the API, or add a `deny`/`allow` rule for the data dir. |
 | The model calls `workflow_control status` over and over while a run is going | Model habit: status never returns the result, and from the second call it says repeating does not help. Tell it to wait for the notification. |
 | The model relaunched a failed run without being asked | Model habit (some small models do it). The failed-run notification says to retry only if you ask; tell it not to relaunch. |
-| An agent fails with "workflow agents cannot ask for approval" | Add an opencode `allow` rule for the tool or directory it needs. |
+| An agent fails with "workflow agents cannot ask for approval" | It is unlinked, worktree-isolated, or configured with `permissionMode: "deny"`. Allow the specific action in your rules, or use a non-worktree agent with `permissionMode: "prompt"` and an attached client. |
 | `/deep-research` stops with `NO_WEB_ACCESS` | Run one web search in your own session first to pick a provider. |
 
 More cases (worktrees, `scriptPath` errors, stuck agents, leftover worktrees):

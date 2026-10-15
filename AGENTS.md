@@ -70,12 +70,15 @@ reasoning,cache:{read,write}}, cost, outcome:"succeeded"|...}`; `context({sessio
 messages; assistant messages are `{type:"assistant", content:[{type:"text", text}|{type:"reasoning"}|...]}`;
 `ctx.storage.get/set` work. More API notes: `docs/OPENCODE-API-NOTES.md`.
 
+On 2.0.29, ordinary workflow agents use native `parentID` links and approval prompts. Worktree
+agents remain unlinked and fail closed. Keep `permissionMode: "deny"` available for unattended runs.
+
 ## Docs map
 
 - `docs/PARITY.md` — behavior spec, one ID per behavior, each with a parity test (`P` = Claude Code
   parity, `X` = extensions marked `EXT`).
 - `docs/E2E.md` — live test harness, known gotchas, the demo script.
-- `docs/OPENCODE-API-NOTES.md` — observed opencode 2.0.15 plugin API behavior.
+- `docs/OPENCODE-API-NOTES.md` — current linking/approval behavior and historical 2.0.15 observations.
 - `docs/design/` — approved designs for features beyond Claude Code (steering, live progress tree)
   and design decisions such as how the parent model sees per-agent outputs (`agent-output-access.md`).
 - `docs/notes/` — maintainer notes and drafts (not published anywhere).

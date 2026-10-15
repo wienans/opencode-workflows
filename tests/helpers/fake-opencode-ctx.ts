@@ -1,5 +1,5 @@
-// Fake opencode v2 plugin Context for runner unit tests. Shapes mirror what opencode 2.0.15
-// returned live (see docs/OPENCODE-API-NOTES.md):
+// Fake opencode v2 plugin Context for runner unit tests. Shapes mirror the recorded live API,
+// including 2.0.29's linked child sessions (see docs/OPENCODE-API-NOTES.md):
 //
 //   session.create -> Session.Info {id, projectID, model?, cost, tokens:{input,output,reasoning,
 //                     cache:{read,write}}, time, title, metadata, permissions, location}
@@ -362,10 +362,12 @@ export function createFakeCtx(opts: FakeCtxOptions = {}) {
       async create(input: any = {}) {
         calls.create.push(input)
         if (opts.createError) throw new Error(opts.createError)
+        const parent = input.parentID ? need(input.parentID).info : undefined
         const id = `ses_child${String(++seq).padStart(4, "0")}`
         const info: Record<string, any> = {
           id,
           projectID,
+          ...(parent ? { parentID: parent.id } : {}),
           ...(() => {
             const m = opts.childModel ? opts.childModel(input.model) : input.model ? { variant: "default", ...input.model } : undefined
             return m ? { model: m } : {}
@@ -377,7 +379,7 @@ export function createFakeCtx(opts: FakeCtxOptions = {}) {
           ...(input.agent ? { agent: input.agent } : {}),
           ...(input.metadata ? { metadata: input.metadata } : {}),
           ...(input.permissions ? { permissions: input.permissions } : {}),
-          location: input.location ?? { directory },
+          location: parent?.location ?? input.location ?? { directory },
         }
         sessions.set(id, { info, messages: [], turns: 0, inbox: [], delivered: [] })
         return structuredClone(info)

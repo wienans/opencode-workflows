@@ -1,6 +1,23 @@
-# opencode 2.0.15 plugin API: verified facts for the workflow runner
+# OpenCode plugin API notes for the workflow runner
 
-Everything below was observed live on opencode **2.0.15** (`npx opencode2 run --standalone`) using
+## 2.0.29 linked sessions and approval
+
+- `ctx.session.create({parentID, ...})` creates a linked child at its parent's location. The
+  workflow runner uses this for non-worktree agents. Supplying a worktree location instead keeps
+  the agent unlinked, because linked children inherit the parent's location.
+- Linked children's permission requests remain owned by the child and are collected by the native
+  parent session UI. The workflow permission hook leaves their `ask` decisions untouched by default.
+  It still denies asks for unlinked agents and for `permissionMode: "deny"` runs.
+- `ctx.permission.assert` is available for plugin-owned operations. This change does not use it
+  to proxy child approvals, and `scriptPath` admission still uses the existing non-interactive checks.
+- `tests/e2e/permissions.test.ts` verifies native session linking and the server-side request/reply
+  lifecycle without model calls, including configured denials after an always-allow reply.
+  The runner and guard are covered through the real plugin in `tests/parity/subagents.test.ts`.
+  Interactive TUI rendering has not been rechecked.
+
+## Historical 2.0.15 observations
+
+The remaining sections were observed live on opencode **2.0.15** (`npx opencode2 run --standalone`) using
 the throwaway plugins in `tests/e2e/spikes/` (`explore.js`, `runner-live.ts`), unless it is marked
 *(source)*, which means it was read from the v2 branch of `anomalyco/opencode` (`packages/core/src`).
 The fake in `tests/helpers/fake-opencode-ctx.ts` mirrors these shapes.
@@ -22,7 +39,7 @@ The fake in `tests/helpers/fake-opencode-ctx.ts` mirrors these shapes.
     `model` field. So the runner always passes the parent's model explicitly (P25).
   - A `variant` is stored as given, e.g. `{…, "variant":"high"}`. When no variant is given, opencode
     fills in `"default"`.
-  - The plugin `create` has no `parentID` *(source: plugin/host.ts)*. The default `location` is the
+  - On 2.0.15, the plugin `create` had no `parentID` *(source: plugin/host.ts)*. The default `location` is the
     plugin's own location.
   - `metadata` and `permissions` are stored verbatim and returned by `get()`.
 - `prompt({sessionID, text})` returns immediately with

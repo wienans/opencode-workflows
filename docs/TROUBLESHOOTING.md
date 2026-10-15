@@ -40,8 +40,8 @@ and include the run's `run.json` and `journal.jsonl`. They are in the run's tran
 
 | Symptom | Cause and fix |
 |---|---|
-| An agent fails with "workflow agents cannot ask for approval" | The agent needed a permission that your rules set to `ask`. Nobody can answer that prompt, so it is denied. Add an opencode `allow` rule for that tool or directory, or change the prompt. |
-| An agent seems stuck | A tool may be waiting on something nobody sees. Set `OPENCODE_WORKFLOW_AGENT_TIMEOUT_MS`, or ask the model to `stop_agent` it (that `agent()` returns `null`). |
+| An agent fails with "workflow agents cannot ask for approval" | It is unlinked, worktree-isolated, or configured with `permissionMode: "deny"`. Add an `allow` rule for the specific tool or directory, or use a non-worktree agent with `permissionMode: "prompt"` and an attached client. |
+| An agent seems stuck | Check the parent session for a native permission prompt. For unattended agents, set `OPENCODE_WORKFLOW_PERMISSION_MODE=deny`. You can also set `OPENCODE_WORKFLOW_AGENT_TIMEOUT_MS`, or ask the model to `stop_agent` it (that `agent()` returns `null`). |
 | A schema agent throws after several attempts | Its output didn't match the schema `MAX_STRUCTURED_OUTPUT_RETRIES` times (default 5). Simplify the schema, raise the limit, or use a stronger model for that agent. |
 | `effort` has no effect, with a warning | The model has no variant for that effort level. The option is ignored. |
 | A schema agent in a worktree returns loosely parsed JSON, or its approval requests hang | The plugin isn't loaded in the worktree. Install it globally, or commit the project config ([INSTALL.md](INSTALL.md#why-global)). |

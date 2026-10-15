@@ -391,7 +391,7 @@ export class WorkflowHost {
    * UNC and device paths are refused outright (opening one can reach a remote SMB host). A path whose
    * real location (symlinks resolved) is outside the project directory, this session's run store and
    * the personal workflows dir needs an `external_directory` allow rule for its directory; any path
-   * whose `read` rule is deny is refused. Plugins cannot ask the user, so "ask" counts as refused.
+   * whose `read` rule is deny is refused. This path does not request interactive approval, so "ask" counts as refused.
    * Returns the absolute path as given (P04 keeps it; its real target is what was checked); throws with the reason otherwise.
    */
   private async authorizeScriptPath(given: string, sessionID: string, agent?: string): Promise<string> {

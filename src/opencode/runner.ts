@@ -1,6 +1,6 @@
 // AgentRunner over the opencode v2 plugin Context: one workflow agent = one child session.
 //
-//   create (tagged title + metadata, model, agent, permissions, location) -> prompt -> wait
+//   create (parentID or worktree location, tagged metadata, model, agent, permissions) -> prompt -> wait
 //   -> get (outcome, tokens, cost) -> context (last assistant text)
 //
 // Structured output (P21) goes through the `workflow_submit` tool (src/opencode/submit.ts); the
@@ -54,9 +54,10 @@ export interface ParentSession {
 }
 
 const PREAMBLE_HEAD =
-  "You are a subagent run non-interactively by a workflow script. No human reads or answers you during this task."
+  "You are a subagent run non-interactively by a workflow script. No human answers conversational questions during this task."
 const PREAMBLE_NO_QUESTIONS =
   "- Do not ask questions or ask for confirmation: when something is unclear, make a reasonable assumption and continue."
+const PREAMBLE_APPROVALS = "- Tool permission approvals are handled by opencode, not by conversational questions."
 const PREAMBLE_NO_WORKFLOWS = "- You cannot launch workflows."
 
 /**
@@ -67,6 +68,7 @@ const PREAMBLE_NO_WORKFLOWS = "- You cannot launch workflows."
 export const SUBAGENT_PREAMBLE = [
   PREAMBLE_HEAD,
   PREAMBLE_NO_QUESTIONS,
+  PREAMBLE_APPROVALS,
   "- Your FINAL message is returned verbatim to the script as data. End with a final text answer that contains only the " +
     "requested content, in the requested format: no greetings, no follow-up offers. Mention an assumption only if the " +
     "requested format has room for it.",
@@ -79,6 +81,7 @@ export const SUBAGENT_PREAMBLE = [
 export const STRUCTURED_SUBAGENT_PREAMBLE = [
   PREAMBLE_HEAD,
   PREAMBLE_NO_QUESTIONS,
+  PREAMBLE_APPROVALS,
   "- Your answer is your workflow_submit call (see the required output format after the task): its `output` is " +
     "returned to the script as data. Put any assumption inside that output only if its schema has room for it.",
   PREAMBLE_NO_WORKFLOWS,
@@ -507,7 +510,7 @@ export function createOpencodeRunner(ctx: RunnerContext, options: OpencodeRunner
         // Permissions: the parent agent's restrictions (when the child runs another agent), the
         // parent's session rules, then the P60 denies. Later rules win.
         const permissions: PermissionRule[] = [...chosen.rules, ...(parent?.permissions ?? []).map((r) => ({ ...r }))]
-        // P63: interactive tools (question forms) would wait forever in a session nobody sees.
+        // P63/P78: approval prompts are supported, but agents must not ask conversational questions.
         for (const tool of CHILD_DENIED_INTERACTIVE_TOOLS) permissions.push({ action: tool, resource: "*", effect: "deny" })
         for (const tool of denied) permissions.push({ action: tool, resource: "*", effect: "deny" })
         permissions.push({ action: SUBMIT_TOOL_NAME, resource: "*", effect: schema ? "allow" : "deny" })
@@ -526,7 +529,8 @@ export function createOpencodeRunner(ctx: RunnerContext, options: OpencodeRunner
           ...(chosen.agent ? { agent: chosen.agent } : {}),
           ...(resolved.model ? { model: resolved.model } : {}),
           permissions,
-          ...(worktree ? { location: { directory: worktree.directory } } : {}),
+          // Linked children inherit the parent's location. Worktrees need a separate, unlinked session.
+          ...(worktree ? { location: { directory: worktree.directory } } : { parentID: options.parentSessionID }),
         })) as { id: string }
         sessionID = created.id
         update({ sessionID })

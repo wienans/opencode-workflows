@@ -20,6 +20,8 @@ export const PLUGIN_ID = "dynamic-workflows"
 export const DISABLE_ENV = "OPENCODE_DISABLE_WORKFLOWS"
 /** `0`/`false`/`no`/`off` makes the live tree's RPC read-only (X17). */
 export const RPC_CONTROL_ENV = "OPENCODE_WORKFLOW_RPC_CONTROL"
+/** Linked workflow children prompt by default; "deny" is for unattended runs. */
+export const PERMISSION_MODE_ENV = "OPENCODE_WORKFLOW_PERMISSION_MODE"
 
 /** Injection seams (tests) and host overrides. Everything is optional. */
 export interface PluginDeps {
@@ -63,6 +65,10 @@ export async function setupPlugin(ctx: Plugin.Context, deps: PluginDeps = {}): P
   const env = deps.env ?? process.env
   const options = (ctx.options ?? {}) as Record<string, unknown>
   if (isDisabled(env, options)) return
+  const permissionMode = env[PERMISSION_MODE_ENV] ?? options.permissionMode ?? "prompt"
+  if (permissionMode !== "prompt" && permissionMode !== "deny") {
+    throw new Error(`${PERMISSION_MODE_ENV} / permissionMode must be "prompt" or "deny"`)
+  }
 
   const cwd = String(ctx.location.directory)
   const registryOptions: RegistryOptions = { env, ...deps.registryOptions }
@@ -140,11 +146,11 @@ export async function setupPlugin(ctx: Plugin.Context, deps: PluginDeps = {}): P
   try {
     live.start()
     await live.register((ctx as any).rpc)
-    // P63: an "ask" in a workflow child would wait forever (nobody sees that session): deny it instead.
+    // P63: linked children use native approval unless disabled for unattended runs. Worktrees fail closed.
     // Registered by every instance, so a worktree instance guards the children in its own location.
     const permissionHook = (ctx as any).permission?.hook as Plugin.Context["permission"]["hook"] | undefined
     if (typeof permissionHook === "function") {
-      registrations.push(await permissionHook("evaluate", createChildAskGuard(ctx)))
+      registrations.push(await permissionHook("evaluate", createChildAskGuard(ctx, permissionMode)))
     }
     registrations.push(
       await ctx.tool.transform((editor) => {

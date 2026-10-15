@@ -3,9 +3,9 @@
 // means "ask"; core/src/util/wildcard.ts `match`). A session's effective rules are its agent's rules
 // followed by the session's own `permissions` (docs/OPENCODE-API-NOTES.md "Permissions").
 //
-// The plugin evaluates rules without interactive approval and treats "ask" as "not allowed"
-// (fail closed), except where noted by the caller. This behavior predates the plugin
-// permission.assert API added in opencode 2.0.29.
+// Script admission still evaluates rules without interactive approval. Child tool checks stay
+// with opencode: linked children use its native approval UI, while the guard below fails closed
+// for unlinked agents and unattended runs.
 
 import type { Plugin } from "@opencode/plugin"
 
@@ -14,6 +14,9 @@ export interface PermissionRule {
   resource: string
   effect: "allow" | "deny" | "ask"
 }
+
+/** Native approval for linked children, or fail-closed approval for unattended runs. */
+export type PermissionMode = "prompt" | "deny"
 
 /** opencode's Wildcard.match: `*` any run (including `/`), `?` one char; `\` normalised to `/`. */
 export function wildcardMatch(input: string, pattern: string): boolean {
@@ -84,12 +87,12 @@ export async function effectiveSessionRules(
   return [...agentRules, ...sessionRules]
 }
 
-/** Tools denied in every workflow child: they wait on the user in a session the user never sees. */
+/** Conversational questions stay disabled even when native tool approvals are enabled. */
 export const CHILD_DENIED_INTERACTIVE_TOOLS = ["question"] as const
 
 export const CHILD_ASK_DENIED_MESSAGE =
-  "workflow agents cannot ask for approval: this workflow agent runs in a background session the user " +
-  "does not see, so the request was denied. Continue without it, or report that it is needed in your reply."
+  "workflow agents cannot ask for approval without a linked parent session, so this request was denied. " +
+  "Continue without it, or report that it is needed in your reply."
 
 /** The event opencode passes to `permission.hook("evaluate", …)` (plugin PermissionEvaluation). */
 export interface PermissionEvaluationEvent {
@@ -99,23 +102,24 @@ export interface PermissionEvaluationEvent {
 }
 
 /**
- * `permission.hook("evaluate")` callback: an "ask" raised by a workflow child session (metadata
- * `workflowRunId`) becomes "deny" with an explanation, because nobody sees that session's prompts and
- * the agent would wait forever (opencode shows and auto-accepts asks only for the viewed session and
- * its parentID family; plugin-created children have no parentID). Other sessions are untouched.
+ * Linked workflow children use opencode's native approval UI under their parent session. An "ask"
+ * from an unlinked workflow child, such as a worktree agent, becomes "deny" instead of waiting on
+ * a prompt outside that session family. Mode "deny" also rejects linked children's asks for unattended
+ * runs. Existing allow/deny decisions and other sessions are untouched.
  * opencode runs the hook for the sessions of the plugin instance's own location, so every instance
  * (including the one loaded in a worktree) guards its own children.
  */
-export function createChildAskGuard(ctx: Pick<Plugin.Context, "session">, cacheLimit = 4096) {
+export function createChildAskGuard(ctx: Pick<Plugin.Context, "session">, mode: PermissionMode = "prompt", cacheLimit = 4096) {
   const known = new Map<string, Promise<boolean>>()
-  const isWorkflowChild = (sessionID: string): Promise<boolean> => {
+  const needsAskGuard = (sessionID: string): Promise<boolean> => {
     let p = known.get(sessionID)
     if (!p) {
       p = (async () => {
         try {
           // Deferred so a synchronous throw also lands after the cache entry is set (and is removed).
           const info = (await Promise.resolve().then(() => ctx.session.get({ sessionID } as any))) as any
-          return typeof info?.metadata?.workflowRunId === "string"
+          return typeof info?.metadata?.workflowRunId === "string" &&
+            (mode === "deny" || !(typeof info.parentID === "string" && info.parentID === info.metadata.parentSessionID))
         } catch {
           known.delete(sessionID) // unknown / transient failure: not cached
           return false
@@ -128,8 +132,11 @@ export function createChildAskGuard(ctx: Pick<Plugin.Context, "session">, cacheL
   }
   return async (event: PermissionEvaluationEvent): Promise<void> => {
     if (event.effect !== "ask" || !event.sessionID) return
-    if (!(await isWorkflowChild(event.sessionID))) return
+    if (!(await needsAskGuard(event.sessionID))) return
     event.effect = "deny"
-    event.message = CHILD_ASK_DENIED_MESSAGE
+    event.message = mode === "deny"
+      ? 'workflow agents cannot ask for approval because permissionMode is "deny". ' +
+        "Continue without it, or report that it is needed in your reply."
+      : CHILD_ASK_DENIED_MESSAGE
   }
 }
